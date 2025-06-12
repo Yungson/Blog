@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yungson</title>
+    <!-- 引入 Google Font 'IBM Plex Mono' -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* CSS 樣式 */
+        /* 基本重設與全域樣式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #ffffff; /* Fallback background */
+            color: rgb(0, 0, 0);
+            font-family: 'IBM Plex Mono', monospace;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+
+        /* 隱藏元素的通用 class (主要用於 Modal 初始隱藏) */
+        .is-hidden {
+            display: none !important;
+        }
+
+        /* 頁面容器基本樣式 (修改) */
+        #entry-screen, /* 將 entry-screen 加入此規則 */
+        .page {
+            width: 100%;
+            height: 100%;
+            position: absolute; /* 保持絕對定位 */
+            top: 0;
+            left: 0;
+            background-color: #fff; /* 預設背景，會被 entry-screen 覆蓋 */
+            display: flex; /* 保持 flex 以便內部排版 */
+            flex-direction: column;
+
+            /* --- 動畫初始狀態 --- */
+            opacity: 0; /* 初始透明 */
+            visibility: hidden; /* 初始不佔據渲染空間，不可見 */
+            pointer-events: none; /* 初始不可交互 */
+            transform: translateX(0); /* 確保初始 transform 正確 */
+            /* 移除這裡的 CSS transition，讓 Anime.js 完全控制 */
+            /* transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out; */
+        }
+
+        /* --- 進入畫面樣式 (保留特定背景) --- */
+        #entry-screen {
+            background-image: url('assets/startBG.jpg'); /* 設定背景圖片路徑 */
+            background-size: cover; /* 讓背景圖片填滿整個容器 */
+            background-position: center center; /* 將圖片置中 */
+            background-repeat: no-repeat; /* 防止圖片重複 */
+            background-color: #ffffff; /* 保留 fallback 背景色 */
+            cursor: pointer; /* 提示背景可點擊 */
+            /* Opacity, visibility, pointer-events 將由 JS 在初始化時設定 */
+        }
+
+        .entry-clickable-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1; /* 在連結下方 */
+        }
+
+        #entry-links {
+            position: absolute; /* 改為絕對定位到右下角 */
+            bottom: 30px; /* 離底部距離 */
+            right: 30px; /* 離右邊距離 */
+            display: flex;
+            gap: 50px; /* 增大連結間距 */
+            z-index: 2; /* 在背景上方 */
+        }
+
+        .entry-link {
+            font-size: 4em;  /* 字體放大 */
+            font-weight: bold; /* 加粗 */
+            color: #ffffff; /* 調整顏色 */
+            cursor: pointer;
+            background: none; /* 移除背景 */
+            border: none; /* 移除邊框 */
+            padding: 0; /* 移除內邊距 */
+            transition: color 0.2s; /* 保留文字顏色變換效果 */
+        }
+
+        .entry-link:hover {
+            color: #ffe6fd; /* 滑鼠懸停時變黑 */
+        }
+
+
+        /* ---- 通用頁面元素 ---- */
+        .escape-button {
+            position: absolute;
+            top: 20px;
+            left: 35px;
+            background: none;
+            border: none;
+            font-size: 3em;
+            color: #888;
+            cursor: pointer;
+            padding: 5px;
+            z-index: 10; /* 確保在最上層 */
+            transition: color 0.2s;
+        }
+        .escape-button:hover {
+            color: #333;
+        }
+
+        /* 中央內容區域 (用於 About 和 Collection 分頁) */
+        .content-area {
+            width: 80%;
+            max-width: 1000px;
+            margin: 60px auto 20px auto;
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .content-area h1, .content-area h2 {
+            margin-bottom: 20px;
+            color: #444;
+        }
+        .content-area p {
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        /* Loading message style */
+        .loading-message {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+            font-size: 1.1em; /* 稍微放大 */
+        }
+
+        /* ---- Collection 頁面樣式 ---- */
+        #collection-page {
+            flex-direction: row;
+        }
+
+        .collection-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .collection-sidebar {
+            width: 180px;
+            flex-shrink: 0;
+            background-color: #e8e8e8;
+            padding-top: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .collection-sidebar .tab-button {
+            background: none;
+            border: none;
+            padding: 15px 20px;
+            text-align: left;
+            font-size: 1em;
+            font-family: inherit; /* 繼承字體 */
+            cursor: pointer;
+            color: #555;
+            border-bottom: 1px solid #ddd;
+            transition: background-color 0.2s;
+        }
+        .collection-sidebar .tab-button:last-child {
+            border-bottom: none;
+        }
+
+        .collection-sidebar .tab-button:hover {
+            background-color: #dcdcdc;
+        }
+
+        .collection-sidebar .tab-button.active-tab {
+            background-color: rgba(255, 255, 255, 0.7);
+            font-weight: bold;
+            color: #333;
+        }
+
+        .collection-content {
+            flex-grow: 1;
+            position: relative;
+            overflow: hidden;
+            background-color: #fff;
+        }
+
+        .tab-content {
+            /* display: none; 由 JS 控制 */
+            height: 100%; /* 佔滿父容器高度 */
+             display: none; /* 預設隱藏，JS 會根據 active-tab 控制 */
+        }
+
+        .tab-content.active-content {
+            display: block; /* 顯示當前分頁 */
+        }
+
+        /* Collection 頁面內容區樣式 */
+        .collection-content .content-area {
+             margin: 20px auto;
+             height: calc(100% - 40px); /* 內容區高度 */
+        }
+
+        /* 項目網格樣式 */
+        .item-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 25px;
+            padding-top: 20px;
+        }
+
+        .grid-item {
+            text-align: center;
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        .grid-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+
+        .grid-item img {
+            max-width: 100%;
+            height: 150px;
+            object-fit: cover;
+            display: block;
+            margin: 0 auto 10px auto;
+            border-radius: 3px;
+            background-color: #eee; /* 圖片載入時的佔位背景色 */
+        }
+        .grid-item p {
+            font-size: 0.9em;
+            color: #555;
+            margin-bottom: 0;
+            line-height: 1.3;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+
+        /* ---- Post 頁面樣式 ---- */
+        #post-page {
+            align-items: center;
+            padding-top: 60px;
+            overflow-y: auto;
+        }
+
+        .post-list-container {
+            width: 80%;
+            max-width: 900px;
+        }
+
+        .post-list-container h1 {
+            margin-bottom: 30px;
+            text-align: center;
+            color: #444;
+        }
+
+        /* 為空的 .post-list 添加最小高度或提示 (可選) */
+        .post-list:empty::before {
+            content: "目前沒有文章。";
+            display: block;
+            text-align: center;
+            padding: 30px;
+            color: #888;
+        }
+
+        .post-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            background-color: #fff;
+            padding: 20px;
+            margin: 0 auto 15px auto;
+            width: 90%;
+            max-width: 700px;
+            border-radius: 5px;
+            border: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.2s;
+        }
+
+        .post-item:hover {
+            background-color: #f9f9f9;
+            transform: translateX(5px);
+        }
+
+        .post-item-main {
+            flex-grow: 1;
+            margin-right: 20px;
+        }
+
+        .post-title {
+            font-size: 1.3em;
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .post-subtitle {
+            font-size: 0.95em;
+            color: #777;
+            line-height: 1.4;
+            margin-bottom: 0;
+        }
+
+        .post-date {
+            font-size: 0.85em;
+            color: #999;
+            white-space: nowrap;
+            padding-top: 3px;
+        }
+
+        /* ---- About 頁面樣式 ---- */
+        #about-page {
+             justify-content: flex-start;
+             align-items: center;
+             overflow-y: auto;
+        }
+        /* About 頁面使用通用的 .content-area 樣式 */
+
+        /* ---- Modal 樣式 (重要) ---- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex; /* 保持 flex 以便居中 */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000; /* 確保在最頂層 */
+            /* 動畫初始狀態 - 由 JS 控制 opacity 和 pointer-events */
+            opacity: 0;
+            pointer-events: none;
+            /* visibility: hidden; */ /* 考慮移除 visibility，只用 opacity 和 pointer-events */
+        }
+        /* 保留 is-hidden 以便 JS 初始設置 display: none */
+        .modal-overlay.is-hidden {
+             display: none !important; /* 確保 display:none 生效 */
+        }
+
+        .modal-content {
+            width: 60%;
+            height: 90%;
+            max-width: 900px;
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 30px 40px;
+            position: relative;
+            overflow-y: auto;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+             /* 動畫初始狀態 - 由 JS 控制 opacity 和 transform */
+            opacity: 0;
+            transform: scale(0.95) translateY(10px);
+             /* visibility: hidden; */ /* 考慮移除 visibility */
+        }
+
+        .close-modal-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 2em;
+            color: #aaa;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0;
+            transition: color 0.2s;
+        }
+        .close-modal-btn:hover {
+            color: #333;
+        }
+
+        /* Modal 內部 Markdown 內容樣式 (範例) */
+        #modal-post-content {
+             padding: -10px 0; /* 給內容一些上下內邊距 */
+        }
+        #modal-post-content h1,
+        #modal-post-content h2,
+        #modal-post-content h3,
+        #modal-post-content h4 {
+            margin-top: 1.2em;
+            margin-bottom: 0.8em;
+            color: #333;
+            line-height: 1.2;
+        }
+        #modal-post-content h1 { font-size: 1.8em; }
+        #modal-post-content h2 { font-size: 1.5em; }
+        #modal-post-content h3 { font-size: 1.3em; }
+
+        #modal-post-content p {
+            line-height: 1.2;
+            margin-bottom: 0.8em;
+            color: #555;
+        }
+        #modal-post-content img {
+            max-width: 100%; /* 確保圖片不超出容器 */
+            height: auto;
+            display: block; /* 避免圖片下方有多餘空間 */
+            margin: 20px auto; /* 圖片居中並有上下間距 */
+            border-radius: 4px; /* 可選：圖片圓角 */
+            background-color: #f0f0f0; /* 圖片載入時的佔位背景色 */
+        }
+        #modal-post-content a {
+             color: #007bff; /* 連結顏色 */
+             text-decoration: none;
+             transition: color 0.2s;
+        }
+        #modal-post-content a:hover {
+            color: #0056b3;
+            text-decoration: underline;
+        }
+        #modal-post-content ul,
+        #modal-post-content ol {
+             margin-left: 2em;
+             margin-bottom: 1em;
+        }
+         #modal-post-content li {
+             margin-bottom: 0.5em;
+             line-height: 1.6;
+         }
+         #modal-post-content code {
+            background-color: #f5f5f5;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: 'IBM Plex Mono', monospace; /* 確保代碼字體 */
+            font-size: 0.9em;
+         }
+         #modal-post-content pre {
+            background-color: #f5f5f5;
+            padding: 1em;
+            border-radius: 4px;
+            overflow-x: auto; /* 處理長代碼行 */
+            margin-bottom: 1em;
+         }
+         #modal-post-content pre code {
+             background-color: transparent; /* pre 背景已足夠 */
+             padding: 0;
+             font-size: 0.9em;
+         }
+         #modal-post-content blockquote {
+             border-left: 4px solid #ccc;
+             padding-left: 1em;
+             margin: 1em 0 1em 0; /* 移除左右 margin */
+             color: #666;
+         }
+         #modal-post-content hr {
+            border: none;
+            border-top: 1px solid #eee;
+            margin: 2em 0;
+         }
+
+        /* ---- 響應式調整 (保持不變) ---- */
+        @media (max-width: 768px) {
+            .content-area { width: 90%; }
+            .collection-container { flex-direction: column; }
+            .collection-sidebar {
+                width: 100%; padding-top: 60px; flex-direction: row;
+                overflow-x: auto; justify-content: flex-start;
+                padding-left: 10px; padding-right: 10px;
+            }
+            .collection-sidebar .tab-button {
+                border-bottom: none; border-right: 1px solid #ddd;
+                white-space: nowrap; padding: 10px 15px;
+            }
+            .collection-content .content-area { width: 95%; }
+            .item-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; }
+            .grid-item img { height: 120px; }
+            .post-list-container { width: 95%; }
+            .post-item { flex-direction: column; align-items: flex-start; width: 100%; }
+            .post-date { margin-top: 10px; align-self: flex-end; }
+            .modal-content { width: 90%; height: 85%; padding: 20px; }
+            #modal-post-content { padding: 0; } /* 窄螢幕Modal內不需要額外padding */
+            #entry-links { right: 15px; bottom: 15px; gap: 15px; }
+            .entry-link { font-size: 2.5em; /* 調整響應式字體大小 */ }
+             .escape-button { font-size: 2em; } /* 調整響應式 ESC 按鈕大小 */
+        }
+
+        @media (max-width: 480px) {
+            .item-grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; }
+            .grid-item img { height: 100px; }
+            .escape-button { font-size: 1.5em; top: 15px; left: 15px; }
+            .collection-sidebar { padding-top: 50px; }
+             #entry-links { gap: 10px; }
+             .entry-link { font-size: 2em; }
+             .modal-content { width: 95%; padding: 15px; } /* 更窄螢幕調整 */
+             .post-item { padding: 15px; }
+        }
+    </style>
+    <!-- 引入 Anime.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+</head>
+<body>
+
+    <!-- 進入畫面 -->
+    <!-- style 屬性將由 JS 在初始化時設置 opacity/visibility -->
+    <div id="entry-screen">
+        <div class="entry-clickable-bg"></div> <!-- 用於觸發 About 頁面 -->
+        <div id="entry-links">
+            <span id="entry-post" class="entry-link" data-target="post-page">Post</span>
+            <span id="entry-collection" class="entry-link" data-target="collection-page">Collection</span>
+        </div>
+    </div>
+
+    <!-- Collection 頁面 -->
+    <!-- page class 包含初始的 opacity/visibility 樣式 -->
+    <div id="collection-page" class="page">
+        <button class="escape-button" data-target="entry-screen">←</button>
+        <div class="collection-container">
+            <nav class="collection-sidebar">
+                <button class="tab-button active-tab" data-tab="animation" data-json-source="animemovielist.json">動畫/影集</button>
+                <button class="tab-button" data-tab="music" data-json-source="songlist.json">音樂</button>
+                <button class="tab-button" data-tab="artist" data-json-source="artistlist.json">繪師</button>
+                <button class="tab-button" data-tab="book" data-json-source="booklist.json">書</button>
+            </nav>
+            <main class="collection-content">
+                <div id="content-animation" class="tab-content content-area active-content">
+                    <h2>動畫/影集</h2>
+                    <div class="item-grid"></div>
+                    <p class="loading-message">載入中...</p>
+                </div>
+                <div id="content-music" class="tab-content content-area">
+                    <h2>音樂</h2>
+                    <div class="item-grid"></div>
+                    <p class="loading-message">載入中...</p>
+                </div>
+                <div id="content-artist" class="tab-content content-area">
+                    <h2>繪師</h2>
+                    <div class="item-grid"></div>
+                    <p class="loading-message">載入中...</p>
+                </div>
+                <div id="content-book" class="tab-content content-area">
+                    <h2>書</h2>
+                    <div class="item-grid"></div>
+                    <p class="loading-message">載入中...</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Post 頁面 -->
+    <div id="post-page" class="page">
+        <button class="escape-button" data-target="entry-screen">←</button>
+        <div class="post-list-container">
+            <h1>文章列表</h1>
+            <div class="post-list">
+                <!-- 文章列表將由 JavaScript 動態載入 -->
+                <p class="loading-message">正在載入文章列表...</p> <!-- 可以加個載入提示 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- About 頁面 -->
+    <div id="about-page" class="page">
+        <button class="escape-button" data-target="entry-screen">←</button>
+        <div class="content-area">
+            <h1>關於我</h1>
+            <p>這裡可以寫一些關於您自己或這個部落格的介紹。</p>
+            <p>我是晏菘，一位動畫苦手，學分白癡。準備提早入土，請小力鞭打！</p>
+            <p>#漂亮寶貝不敢了 #大家掰掰 #想修鞋👟</p>
+        </div>
+    </div>
+
+    <!-- Post Modal (初始隱藏) -->
+    <!-- 使用 is-hidden class 配合 JS 初始化 -->
+    <div id="post-modal" class="modal-overlay is-hidden">
+        <div class="modal-content">
+            <button class="close-modal-btn">×</button>
+            <div id="modal-post-content">
+                <!-- 文章內容會載入這裡 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入 Anime.js (已存在) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+
+    <!-- **** 新增：引入 Marked.js **** -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- 引入你的 JavaScript 檔案 (已存在) -->
+    <!-- 確保你的 script.js 文件路徑正確 -->
+    <script src="script.js"></script>
+</body>
+</html>
